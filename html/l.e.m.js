@@ -7,8 +7,16 @@ var g=1
 var vThrust=5
 var hThrust=2
 
-// display
+// Instrument Display
 var vx,vy,alt
+
+// Status Display
+var status_elem,status_text;
+var status_speed=70;
+var caret=false;
+
+// touch device
+var touch_device=false
 
 // State Variables
 var lem;
@@ -17,6 +25,7 @@ var lz_width=50
 var lz_height=3
 var lz_x,lz_y
 
+// Terrain
 var terrain_roughness=30
 var terrain_points=100
 var terrain_min=400
@@ -24,7 +33,34 @@ var terrain_max=500
 var terrain_x=[]
 var terrain_y=[]
 
-// Background variables
+// Paint
+var lem_x
+var lem_y
+
+// Functions
+var spacebar_function
+var touch_function
+
+// Strings
+var strings
+non_touch_strings={
+abort: "Mission Abotred!",
+crash: "Mission Failed: Hard landing!",
+success:"Mission Success\nDistance to Landing Zone: ",
+try_again: "\nPress <spacebar> to try again.",
+intro: "Welcome to Lunar Excursion Module (L.E.M.)\n"+
+"Use the arrow keys (left,right,down) to activate thrusters\n"+
+"Press <spacebar> to begin"}
+
+touch_strings={
+abort: "Mission Abotred!",
+crash: "Mission Failed: Hard landing!",
+success:"Mission Success\nDistance to Landing Zone: ",
+try_again: "\nTap screen to try again.",
+intro: "Welcome to Lunar Excursion Module (L.E.M.)\n"+
+"Tap on screen relative to L.E.M. (left,right,below) to activate thrusters\n"+
+"Tap screen to begin"}
+
 
 function terrain(x)
 {
@@ -84,7 +120,8 @@ function updatePosition(t1)
 			run=false;
 			show_status()
 			spacebar_function=start
-			type_status("Mission Abotred!\nPress <spacebar> to try again.")
+			touch_function=start
+			type_status(strings.abort+strings.try_again)
 			console.log('aborted') 
 		}
 		// check collision
@@ -104,15 +141,16 @@ function updatePosition(t1)
 			run=false;
 			show_status()
 			spacebar_function=start
+			touch_function=start
 			if(check_crash(this)) 
 			{ 
 				explode()
-				type_status("Mission Failed: Hard landing!\nPress <spacebar> to try again.")
+				type_status(strings.crash+strings.try_again)
 				console.log('crashed') 
 			}
 			else
 			{
-				type_status("Mission Success\nDistance to Landing Zone: "+Math.round(dlz)+"\nPress <spacebar> to try again.")
+				type_status(strings.success+Math.round(dlz)+strings.try_again)
 				console.log('landed') 
 			}
 		}
@@ -171,8 +209,6 @@ function paint_background()
 	background_ctx.fillRect(lz_x,lz_y,lz_width,lz_height)
 }
 
-var lem_x
-var lem_y
 
 function clear_lem()
 {
@@ -195,7 +231,6 @@ function explode()
 	}
 	particles.t0=performance.now()
 	console.log("exploded")
-	console.log(particles)
 	window.requestAnimationFrame(paint_explosion)
 }
 
@@ -284,18 +319,77 @@ function toggle_run()
 	}
 }
 
-var spacebar_function=toggle_run
+function event_xy(e,elem)
+{
+    var cr=elem.getBoundingClientRect()
+    return {
+        x: e.clientX-cr.left,
+        y: e.clientY-cr.top
+    }
+}
+
+
+function touch(e)
+{
+	touch_function(e)
+}
+
+function touch_thrust(e)
+{
+	t=performance.now()
+	var left=false
+	var right=false
+	var down=false
+	e.preventDefault()
+	for(var i=0; i<e.targetTouches.length; i++)
+	{
+		var p=event_xy(e.targetTouches[i],lem_screen)
+		var dx=lem.x-p.x
+		var dy=lem.y-p.y
+		var theta=Math.atan2(dy,dx)*180/Math.PI
+		if( theta<90 && theta>-45 ) //left thrust
+		{
+			if( !lem.thrust_left ) lem.updatePosition(t)
+			lem.thrust_left=true
+			left=true
+		}
+		else if ( theta<-45 && theta>-135) // down thrust
+		{
+			if( !lem.thrust_down ) lem.updatePosition(t)
+			lem.thrust_down=true
+			down=true
+		}
+		else  //right thrust
+		{
+			if( !lem.thrust_right ) lem.updatePosition(t)
+			lem.thrust_right=true
+			right=true
+		}
+	}
+	if( lem.thrust_right && !right )
+	{
+		lem.updatePosition(t)
+		lem.thrust_right=false
+	}
+	if( lem.thrust_left && !left )
+	{
+		lem.updatePosition(t)
+		lem.thrust_left=false
+	}
+	if( lem.thrust_down && !down )
+	{
+		lem.updatePosition(t)
+		lem.thrust_down=false
+	}
+}
 
 // 40 down arrow
 // 37 left arrow
 // 38 right arrow
 function keyDown(e)
 {
-	console.log("keyDown: ")
-	console.log(e)
 	t=performance.now()
 	var keyCode = ('which' in e) ? e.which : e.keyCode;
-	console.log("keyDown: "+keyCode)
 	e.preventDefault()
 	if( lem && lem.fuel>0 )
 	{
@@ -345,10 +439,6 @@ function keyUp(e)
 	}
 }
 
-var status_elem,status_text;
-var status_speed=70;
-var caret=false;
-
 function show_status()
 {
 	status_elem.style.display=""
@@ -393,11 +483,15 @@ function start()
 	lem.t0=performance.now()
 	status_elem.style.display="none"
 	spacebar_function=toggle_run
+	touch_function=touch_thrust
 	toggle_run()
 }
 
 function init()
 {
+	touch_device=("ontouchstart" in window) || window.DocumentTouch!=undefined
+	console.log("Touch device? "+touch_device)
+	strings=touch_device?touch_strings:non_touch_strings
 	status_elem=document.getElementById('status')
 	status_text=document.getElementById('status_text')
 	setInterval(function() { caret=!caret; status_text.style.borderRight=caret?"2px solid #00ff00":"2px solid #000000" },500)
@@ -409,10 +503,11 @@ function init()
 	lem_ctx=lem_screen.getContext('2d')
 	background_screen=document.getElementById('background')
 	background_ctx=background_screen.getContext('2d')
+	document.addEventListener("touchstart",touch)
+	document.addEventListener("touchend",touch)
 	document.addEventListener("keydown",keyDown)
 	document.addEventListener("keyup",keyUp)
 	spacebar_function=start
-	type_status("Welcome to Lunar Excursion Module (L.E.M.)\n"+
-"Use the arrow keys [←,→,↓] to activate thrusters\n"+
-"Press <spacebar> to begin")
+	touch_function=start
+	type_status(strings.intro)
 }
