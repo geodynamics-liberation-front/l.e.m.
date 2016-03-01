@@ -17,6 +17,7 @@ var caret=false;
 
 // touch device
 var touch_device=false
+var touches
 
 // State Variables
 var lem;
@@ -120,7 +121,7 @@ function updatePosition(t1)
 			run=false;
 			show_status()
 			spacebar_function=start
-			touch_function=start
+			touch_function=(touches==0)?start:touch_debounce
 			type_status(strings.abort+strings.try_again)
 			console.log('aborted') 
 		}
@@ -141,7 +142,7 @@ function updatePosition(t1)
 			run=false;
 			show_status()
 			spacebar_function=start
-			touch_function=start
+			touch_function=(touches==0)?start:touch_debounce
 			if(check_crash(this)) 
 			{ 
 				explode()
@@ -334,6 +335,15 @@ function touch(e)
 	touch_function(e)
 }
 
+function touch_debounce(e)
+{
+	touches=e.touches.length
+	if(touches==0)
+	{
+		touch_function=start
+	}
+}
+
 function touch_thrust(e)
 {
 	t=performance.now()
@@ -341,6 +351,7 @@ function touch_thrust(e)
 	var right=false
 	var down=false
 	e.preventDefault()
+	touches=e.touches.length
 	for(var i=0; i<e.targetTouches.length; i++)
 	{
 		var p=event_xy(e.targetTouches[i],lem_screen)
