@@ -20,8 +20,10 @@ var touch_device=false
 var touches
 
 // State Variables
+var level=0
 var lem;
-var run=false
+var lem_run=false
+var visible=true;
 var lz_width=50
 var lz_height=3
 var lz_x,lz_y
@@ -34,6 +36,10 @@ var terrain_max=500
 var terrain_x=[]
 var terrain_y=[]
 
+// explosion
+var particles=[]
+var exploding=false
+
 // Paint
 var lem_x
 var lem_y
@@ -45,22 +51,24 @@ var touch_function
 // Strings
 var strings
 non_touch_strings={
-abort: "Mission Abotred!",
-crash: "Mission Failed: Hard landing!",
-success:"Mission Success\nDistance to Landing Zone: ",
-try_again: "\nPress <spacebar> to try again.",
-intro: "Welcome to Lunar Excursion Module (L.E.M.)\n"+
-"Use the arrow keys (left,right,down) to activate thrusters\n"+
-"Press <spacebar> to begin"}
+abort: "mission abort",
+crash: "mission failure: hard landing",
+uneven: "mission failure: uneven landing",
+success:"mission success\ndistance to landing zone: ",
+try_again: "\npress <spacebar> to try again.",
+intro: "welcome to lunar excursion module (l.e.m.)\n"+
+"use the arrow keys (left,right,down) to activate thrusters\n"+
+"press <spacebar> to begin"}
 
 touch_strings={
-abort: "Mission Abotred!",
-crash: "Mission Failed: Hard landing!",
-success:"Mission Success\nDistance to Landing Zone: ",
-try_again: "\nTap screen to try again.",
-intro: "Welcome to Lunar Excursion Module (L.E.M.)\n"+
-"Tap on screen relative to L.E.M. (left,right,below) to activate thrusters\n"+
-"Tap screen to begin"}
+abort: "mission abort",
+crash: "mission failure: hard landing",
+uneven: "mission failure: uneven landing",
+success:"mission success\ndistance to landing zone: ",
+try_again: "\ntap screen to try again.",
+intro: "welcome to lunar excursion module (l.e.m.)\n"+
+"press on screen relative to L.E.M. (left,right,below) to activate thrusters\n"+
+"tap screen to begin"}
 
 
 function terrain(x)
@@ -77,7 +85,7 @@ function LEM()
 	this.vx=0
 	this.vy=0
 	this.fuel_capacity=100;
-	this.fuel=this.fuel_capacity;
+	this.fuel=this.fuel_capacity*(1-level/10);
 	this.thrust_left=0
 	this.thrust_right=0
 	this.thrust_down=0
@@ -86,7 +94,7 @@ function LEM()
 
 function updatePosition(t1)
 {
-	if(run)
+	if(lem_run)
 	{
 		var t=(t1-this.t0)/1000
 		this.t0=t1
@@ -118,7 +126,7 @@ function updatePosition(t1)
 			console.log("x: "+this.x)
 			console.log("y: "+this.y)
 			console.log("t: "+t)
-			run=false;
+			lem_run=false;
 			show_status()
 			spacebar_function=start
 			touch_function=(touches==0)?start:touch_debounce
@@ -139,7 +147,7 @@ function updatePosition(t1)
 			console.log("x: "+this.x)
 			console.log("y: "+this.y)
 			console.log("t: "+t)
-			run=false;
+			lem_run=false;
 			show_status()
 			spacebar_function=start
 			touch_function=(touches==0)?start:touch_debounce
@@ -147,11 +155,21 @@ function updatePosition(t1)
 			{ 
 				explode()
 				type_status(strings.crash+strings.try_again)
-				console.log('crashed') 
+				level--;
+				console.log('hard landing') 
+			}
+			else if( Math.abs(terrain(lem.x-10)-terrain(lem.x+10))>5 )
+			{
+			{ 
+				explode()
+				type_status(strings.uneven+strings.try_again)
+				console.log('uneven landing') 
+			}
 			}
 			else
 			{
 				type_status(strings.success+Math.round(dlz)+strings.try_again)
+				level++;
 				console.log('landed') 
 			}
 		}
@@ -222,7 +240,6 @@ function cls_lem()
 }
 
 
-var particles=[]
 function explode()
 {
 	var Pcount=Math.floor(Math.random()*20+10)
@@ -231,36 +248,41 @@ function explode()
 		particles.push({vx: Math.random()*20-10, vy: -Math.random()*20, x:lem.x, y:lem.y})
 	}
 	particles.t0=performance.now()
+	exploding=true
 	console.log("exploded")
 	window.requestAnimationFrame(paint_explosion)
 }
 
 function paint_explosion(t)
 {
-	var remove_particles=[]
-	var dt=(t-particles.t0)/1000
-	particles.t0=t
-	lem_ctx.beginPath()
-	for(var i=0; i<particles.length; i++)
+	if( visible )
 	{
-		var p=particles[i]
-		lem_ctx.moveTo(p.x,p.y)
-		p.x=           p.vx*dt+p.x
-		p.y=.5*g*dt*dt+p.vy*dt+p.y
-		p.vy=g*dt+p.vy
-		lem_ctx.lineTo(p.x,p.y)
-		if( p.x<0 || p.x>lem_screen.width || p.y>terrain(p.x) )
+		var remove_particles=[]
+		var dt=(t-particles.t0)/1000
+		particles.t0=t
+		lem_ctx.beginPath()
+		for(var i=0; i<particles.length; i++)
 		{
-			remove_particles.push(i)
+			var p=particles[i]
+			lem_ctx.moveTo(p.x,p.y)
+			p.x=           p.vx*dt+p.x
+			p.y=.5*g*dt*dt+p.vy*dt+p.y
+			p.vy=g*dt+p.vy
+			lem_ctx.lineTo(p.x,p.y)
+			if( p.x<0 || p.x>lem_screen.width || p.y>terrain(p.x) )
+			{
+				remove_particles.push(i)
+			}
 		}
-	}
-	lem_ctx.stroke()
+		lem_ctx.stroke()
 
-	for( var i=remove_particles.length; i>0; i-- )
-	{
-		particles.splice(remove_particles[i-1],1)
+		for( var i=remove_particles.length; i>0; i-- )
+		{
+			particles.splice(remove_particles[i-1],1)
+		}
+		exploding=particles.length>0
+		if( exploding ) window.requestAnimationFrame(paint_explosion)
 	}
-	if( particles.length>0 ) window.requestAnimationFrame(paint_explosion)
 }
 
 
@@ -307,13 +329,26 @@ function paint_lem(t)
 		lem_ctx.lineTo(lem_x+10,lem_y+25)
 	}
 	lem_ctx.stroke()
-	if(run) window.requestAnimationFrame(paint_lem)
+	if(visible && lem_run) window.requestAnimationFrame(paint_lem)
+}
+
+function visibilityChange(e)
+{
+	visible=!document['hidden']
+	if( visible )
+	{
+		t=performance.now()
+		particles.t0=t
+		if( exploding ) window.requestAnimationFrame(paint_explosion)
+		lem.t0=t
+		if(lem_run) window.requestAnimationFrame(paint_lem)
+	}
 }
 
 function toggle_run()
 {
-	run=!run
-	if( run )
+	lem_run=!lem_run
+	if( lem_run )
 	{
 		lem.t0=performance.now()
 		window.requestAnimationFrame(paint_lem)
@@ -328,7 +363,6 @@ function event_xy(e,elem)
         y: e.clientY-cr.top
     }
 }
-
 
 function touch(e)
 {
@@ -483,6 +517,8 @@ function start()
 {
 	hide_status()
 	particles=[]
+	exploding=false
+
 	cls_lem()
 	create_background()
 	paint_background()
@@ -514,6 +550,7 @@ function init()
 	lem_ctx=lem_screen.getContext('2d')
 	background_screen=document.getElementById('background')
 	background_ctx=background_screen.getContext('2d')
+	document.addEventListener("visibilitychange", visibilityChange);
 	document.addEventListener("touchstart",touch)
 	document.addEventListener("touchend",touch)
 	document.addEventListener("keydown",keyDown)
