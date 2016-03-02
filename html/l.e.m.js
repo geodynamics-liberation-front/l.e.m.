@@ -340,7 +340,7 @@ function visibilityChange(e)
 		t=performance.now()
 		particles.t0=t
 		if( exploding ) window.requestAnimationFrame(paint_explosion)
-		lem.t0=t
+		if( lem ) lem.t0=t
 		if(lem_run) window.requestAnimationFrame(paint_lem)
 	}
 }
